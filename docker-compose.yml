@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  # PostgreSQL database (used for both dev and prod)
+  postgres:
+    image: postgres:16-alpine
+    container_name: boilerplate-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-boilerplate}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - boilerplate-network
+
+  # FastAPI application (only for production)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: boilerplate-app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-boilerplate}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      ENVIRONMENT: production
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - boilerplate-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  boilerplate-network:
+    driver: bridge
